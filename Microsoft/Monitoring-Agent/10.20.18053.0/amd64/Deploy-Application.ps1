@@ -154,7 +154,7 @@ Try {
 		[System.Int32]$LogAnalyticsGatewayPortNumber = 8080
 
 		### 0 = Azure Commercial, 1 = Azure Government
-		[System.Int32]$AzureCloudType = 0
+		[System.Int32]$AzureCloudType = 1
 
 		[System.String]$LogAnalyticsWorkspaceID = ""
 		[System.String]$LogAnalyticsWorkspaceKey = ""
