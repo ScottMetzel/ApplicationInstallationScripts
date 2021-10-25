@@ -140,7 +140,7 @@ Try {
 		[string]$installPhase = 'Pre-Installation'
 
 		## Show Welcome Message, close Internet Explorer if required, allow up to 3 deferrals, verify there is enough disk space to complete the install, and persist the prompt
-		Show-InstallationWelcome -CloseApps 'iexplore' -AllowDefer -DeferTimes 3 -CheckDiskSpace -PersistPrompt
+		Show-InstallationWelcome -CloseApps 'AgentControlPanel' -AllowDefer -DeferTimes 3 -CheckDiskSpace -PersistPrompt
 
 		## Show Progress Message (with the default message)
 		Show-InstallationProgress
@@ -149,26 +149,30 @@ Try {
 		### Define variables related to the LA Gateway and Workspace, and make it so we have to prove we can use it by specifying a boolean value
 		Show-InstallationProgress -StatusMessage "Performing Microsoft Monitoring Agent pre-installation tasks. Please wait..."
 		Write-Log -Message "Specifying installation-specific variables."
+
+		### Specify the FQDN, IP, and port number for the Log Analytics Gateway
 		[System.String]$LogAnalyticsGatewayFQDN = "mygateway.myorganization.com"
 		[System.String]$LogAnalyticsGatewayIPAddress = "123.456.789.012"
 		[System.Int32]$LogAnalyticsGatewayPortNumber = 8080
 
-		### 0 = Azure Commercial, 1 = Azure Government
+		### Specify the Azure cloud type: 0 = Azure Commercial, 1 = Azure Government
 		[System.Int32]$AzureCloudType = 1
 
+		### Supply the Log Analytics Workspace ID and Key to use
 		[System.String]$LogAnalyticsWorkspaceID = ""
 		[System.String]$LogAnalyticsWorkspaceKey = ""
 
+		### These shouldn't be edited
 		[System.String]$LogAnalyticsGatewayURI = [System.String]::Concat($LogAnalyticsGatewayFQDN, ":", $LogAnalyticsGatewayPortNumber)
 		[System.Boolean]$UseLogAnalyticsGateway = $false
 		[System.Boolean]$AddLogAnalyticsWorkspace = $false
 		[System.Boolean]$RemoveLogAnalyticsWorkspace = $false
 		[System.Boolean]$InstallMMA = $false
 		[System.String]$SetupPath = [System.String]::Concat($dirFiles, "\", "Setup.exe")
+		###
 
 		### Check resolution of the Gateway
 		Write-Log -Message "Attempting to resolve the Fully Qualified Domain Name of the Log Analytics Gateway, which is: '$LogAnalyticsGatewayFQDN'."
-
 		if (Resolve-DnsName -Name $LogAnalyticsGatewayFQDN -Type A -ErrorAction SilentlyContinue) {
 
 			### If the FQDN resolved, now try a connection to the it.
