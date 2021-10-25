@@ -167,6 +167,7 @@ Try {
 		[System.Boolean]$UseLogAnalyticsGateway = $false
 		[System.Boolean]$AddLogAnalyticsWorkspace = $false
 		[System.Boolean]$RemoveLogAnalyticsWorkspace = $false
+		[System.Boolean]$MMAInstalled = $false
 		[System.Boolean]$InstallMMA = $false
 		[System.String]$SetupPath = [System.String]::Concat($dirFiles, "\", "Setup.exe")
 		###
@@ -206,62 +207,79 @@ Try {
 
 		### Check for an existing installation
 		Write-Log -Message "Checking for an existing installation of the Microsoft Monitoring Agent"
-		[System.ServiceProcess.ServiceController]$GetMMAService = Get-Service -Name "HealthService" -ErrorAction SilentlyContinue
+		if (Get-InstalledApplication -ProductCode '{88EE688B-31C6-4B90-90DF-FBB345223F94}' -ErrorAction SilentlyContinue) {
+			Write-Log -Message "Microsoft Monitoring Agent is already installed."
+			[System.Boolean]$MMAInstalled = $true
+		}
+		else {
+			Write-Log -Message "Microsoft Monitoring Agent is not installed."
+			[System.Boolean]$MMAInstalled = $false
+		}
 
-		if ($GetMMAService) {
-			### If the service is present, check if it's running
-			Write-Log -Message "MMA service is present."
-			if ($GetMMAService.Status -eq "Running") {
+		### Check for the presence of the MMA service.
+		if ($true -eq $MMAInstalled) {
+			Write-Log -Message "Checking the MMA service."
+			[System.ServiceProcess.ServiceController]$GetMMAService = Get-Service -Name "HealthService" -ErrorAction SilentlyContinue
 
-				### If it's running check workspaces, and set installation of the MMA to false
-				Write-Log -Message "MMA service is also running."
-				[System.Boolean]$InstallMMA = $false
+			if ($GetMMAService) {
+				### If the service is present, check if it's running
+				Write-Log -Message "MMA service is present."
+				if ($GetMMAService.Status -eq "Running") {
 
-				Write-Log -Message "Creating MMA COM Object."
-				[System.__ComObject]$NewMMACOMObject = New-Object -ComObject "AgentConfigManager.MgmtSvcCfg"
+					### If it's running check workspaces, and set installation of the MMA to false
+					Write-Log -Message "MMA service is also running."
+					[System.Boolean]$InstallMMA = $false
 
-				### Get workspaces
-				Write-Log -Message "Getting workspaces."
-				[System.Collections.ArrayList]$CloudWorkspaces = @()
-				$NewMMACOMObject.GetCloudWorkspaces() | ForEach-Object -Process {
-					$CloudWorkspaces.Add($_) | Out-Null
-				}
+					Write-Log -Message "Creating MMA COM Object."
+					[System.__ComObject]$NewMMACOMObject = New-Object -ComObject "AgentConfigManager.MgmtSvcCfg"
+
+					### Get workspaces
+					Write-Log -Message "Getting workspaces."
+					[System.Collections.ArrayList]$CloudWorkspaces = @()
+					$NewMMACOMObject.GetCloudWorkspaces() | ForEach-Object -Process {
+						$CloudWorkspaces.Add($_) | Out-Null
+					}
 
 
-				if ($CloudWorkspaces | Where-Object -FilterScript { $_.workspaceId -eq $LogAnalyticsWorkspaceID }) {
-					### If the workspace is found, check its connectivity.
-					Write-Log -Message "Log Analytics Workspace ID: '$LogAnalyticsWorkspaceID' is already present."
+					if ($CloudWorkspaces | Where-Object -FilterScript { $_.workspaceId -eq $LogAnalyticsWorkspaceID }) {
+						### If the workspace is found, check its connectivity.
+						Write-Log -Message "Log Analytics Workspace ID: '$LogAnalyticsWorkspaceID' is already present."
 
-					[System.__ComObject]$CloudWorkspace = $CloudWorkspaces | Where-Object -FilterScript { $_.workspaceId -eq $LogAnalyticsWorkspaceID }
+						[System.__ComObject]$CloudWorkspace = $CloudWorkspaces | Where-Object -FilterScript { $_.workspaceId -eq $LogAnalyticsWorkspaceID }
 
-					### Check if the workspace is connected
-					if ($CloudWorkspace.ConnectionStatus -eq 0) {
-						Write-Log -Message "Log Analytics Workspace ID: '$LogAnalyticsWorkspaceID' is already connected."
-						[System.Boolean]$AddLogAnalyticsWorkspace = $false
-						[System.Boolean]$RemoveLogAnalyticsWorkspace = $false
+						### Check if the workspace is connected
+						if ($CloudWorkspace.ConnectionStatus -eq 0) {
+							Write-Log -Message "Log Analytics Workspace ID: '$LogAnalyticsWorkspaceID' is already connected."
+							[System.Boolean]$AddLogAnalyticsWorkspace = $false
+							[System.Boolean]$RemoveLogAnalyticsWorkspace = $false
+						}
+						else {
+							Write-Log -Message "Log Analytics Workspace ID: '$LogAnalyticsWorkspaceID' is not connected. Will remove and re-add."
+							[System.Boolean]$AddLogAnalyticsWorkspace = $true
+							[System.Boolean]$RemoveLogAnalyticsWorkspace = $true
+						}
 					}
 					else {
-						Write-Log -Message "Log Analytics Workspace ID: '$LogAnalyticsWorkspaceID' is not connected. Will remove and re-add."
+						### If the workspace is not found, set it to be added
+						Write-Log -Message "Log Analytics Workspace ID: '$LogAnalyticsWorkspaceID' not present."
 						[System.Boolean]$AddLogAnalyticsWorkspace = $true
-						[System.Boolean]$RemoveLogAnalyticsWorkspace = $true
+						[System.Boolean]$RemoveLogAnalyticsWorkspace = $false
 					}
 				}
 				else {
-					### If the workspace is not found, set it to be added
-					Write-Log -Message "Log Analytics Workspace ID: '$LogAnalyticsWorkspaceID' not present."
-					[System.Boolean]$AddLogAnalyticsWorkspace = $true
+					Write-Log -Message "MMA service is not running. Setting MMA to be installed."
+					[System.Boolean]$AddLogAnalyticsWorkspace = $false
 					[System.Boolean]$RemoveLogAnalyticsWorkspace = $false
+					[System.Boolean]$InstallMMA = $true
 				}
 			}
 			else {
-				Write-Log -Message "MMA service is not running. Setting MMA to be installed."
-				[System.Boolean]$AddLogAnalyticsWorkspace = $false
-				[System.Boolean]$RemoveLogAnalyticsWorkspace = $false
+				Write-Log -Message "MMA service not found. Setting MMA to be installed."
 				[System.Boolean]$InstallMMA = $true
 			}
 		}
 		else {
-			Write-Log -Message "MMA service not found. Setting MMA to be installed."
+			Write-Log -Message "The Microsoft Monitoring Agent is not installed. Setting it to be installed."
 			[System.Boolean]$InstallMMA = $true
 		}
 
