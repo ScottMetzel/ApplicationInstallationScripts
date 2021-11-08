@@ -201,7 +201,7 @@ if ($true -eq $LogAnalyticsGatewayConfigured) {
 }
 else {
     Write-Information -MessageData "The desired Log Analytics Gateway state has not been set. Proceeding to write out overall installation state."
-    [System.Boolean]$InstallationConfigurationSuccessful = $true
+    [System.Boolean]$InstallationConfigurationSuccessful = $false
 }
 
 <#
