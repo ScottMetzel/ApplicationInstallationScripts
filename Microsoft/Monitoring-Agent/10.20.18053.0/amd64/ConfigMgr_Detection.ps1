@@ -206,7 +206,7 @@ else {
 
 <#
     Now with everything checked, write out the installation state.
-    This is based on: https://docs.microsoft.com/en-us/previous-versions/system-center/system-center-2012-R2/gg682159(v=technet.10)#to-use-a-custom-script-to-determine-the-presence-of-a-deployment-type
+    This is based on: https://docs.microsoft.com/en-us/mem/configmgr/apps/deploy-use/create-applications#about-custom-script-detection-methods
 #>
 if ($true -eq $InstallationConfigurationSuccessful) {
     [System.String]$Message = "Installation and/or configuration of the Microsoft Monitoring Agent detected successfully. Writing to output stream and exiting 0."
