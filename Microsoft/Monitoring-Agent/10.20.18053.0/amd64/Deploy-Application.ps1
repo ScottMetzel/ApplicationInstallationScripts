@@ -302,12 +302,12 @@ Try {
 						if ($true -eq $UseLogAnalyticsGatewayFQDN) {
 							### If the FQDN is supposed to be used, create the URL for the gateway using it
 							Write-Log -Message "Creating the Log Analytics Gateway URL String using the FQDN of the Gateway."
-							[System.String]$LogAnalyticsGatewayURL = [System.String]::Concat("https://", $LogAnalyticsGatewayFQDN, ":", $LogAnalyticsGatewayPortNumber)
+							[System.String]$LogAnalyticsGatewayURL = [System.String]::Concat("http://", $LogAnalyticsGatewayFQDN, ":", $LogAnalyticsGatewayPortNumber)
 						}
 						else {
 							### If the FQDN cannot be used, create the URL for the gateway using its (manuall-supplied) IP Address instead
 							Write-Log -Message "Creating the Log Analytics Gateway URL String using the IP Address of the Gateway."
-							[System.String]$LogAnalyticsGatewayURL = [System.String]::Concat("https://", $LogAnalyticsGatewayIPAddress, ":", $LogAnalyticsGatewayPortNumber)
+							[System.String]$LogAnalyticsGatewayURL = [System.String]::Concat("http://", $LogAnalyticsGatewayIPAddress, ":", $LogAnalyticsGatewayPortNumber)
 						}
 
 						### Log the value of the URL.
