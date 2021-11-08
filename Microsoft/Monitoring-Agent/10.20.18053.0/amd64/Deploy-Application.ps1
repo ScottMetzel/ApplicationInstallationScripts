@@ -162,9 +162,12 @@ Try {
 		[System.String]$LogAnalyticsWorkspaceID = ""
 		[System.String]$LogAnalyticsWorkspaceKey = ""
 
+		### Supply the product code for the Microsoft Monitoring Agent
+		[System.String]$MMAProductCode = "{88EE688B-31C6-4B90-90DF-FBB345223F94}"
+
 		### These shouldn't be edited
-		[System.String]$LogAnalyticsGatewayURI = [System.String]::Concat($LogAnalyticsGatewayFQDN, ":", $LogAnalyticsGatewayPortNumber)
 		[System.Boolean]$UseLogAnalyticsGateway = $false
+		[System.Boolean]$UseLogAnalyticsGatewayFQDN = $false
 		[System.Boolean]$AddLogAnalyticsWorkspace = $false
 		[System.Boolean]$RemoveLogAnalyticsWorkspace = $false
 		[System.Boolean]$MMAInstalled = $false
@@ -172,42 +175,10 @@ Try {
 		[System.String]$SetupPath = [System.String]::Concat($dirFiles, "\", "Setup.exe")
 		###
 
-		### Check resolution of the Gateway
-		Write-Log -Message "Attempting to resolve the Fully Qualified Domain Name of the Log Analytics Gateway, which is: '$LogAnalyticsGatewayFQDN'."
-		if (Resolve-DnsName -Name $LogAnalyticsGatewayFQDN -Type A -ErrorAction SilentlyContinue) {
-
-			### If the FQDN resolved, now try a connection to the it.
-			Write-Log -Message "The Gateway FQDN was resolved. Attempting a TCP Connection."
-			$TestLAGatewayConnection = Test-NetConnection -ComputerName $LogAnalyticsGatewayFQDN -Port $LogAnalyticsGatewayPortNumber -ErrorAction SilentlyContinue
-			if ($TestLAGatewayConnection.TcpTestSucceeded) {
-				### If the connection succeeded, indicate we'll use it to connect the MMA to it, and on to the 'Workspace
-				Write-Log -Message "Log Analytics Gateway connection test succeeded. Gateway will be used."
-				[System.Boolean]$UseLogAnalyticsGateway = $true
-			}
-			else {
-				Write-Log -Message "Log Analytics Gateway connection test failed. Gateway will not be used."
-				[System.Boolean]$UseLogAnalyticsGateway = $false
-			}
-		}
-		else {
-			### Since the FQDN could not be resolved, try the specified IP address
-			Write-Log -Message "The FQDN could not be resolved. Trying a TCP connection test its specified IP Address: '$LogAnalyticsGatewayIPAddress'."
-
-			$TestLAGatewayConnection = Test-NetConnection -ComputerName $LogAnalyticsGatewayIPAddress -Port $LogAnalyticsGatewayPortNumber -ErrorAction SilentlyContinue
-			if ($TestLAGatewayConnection.TcpTestSucceeded) {
-				### If the connection succeeded, indicate we'll use it to connect the MMA to it, and on to the 'Workspace
-				Write-Log -Message "Log Analytics Gateway connection test succeeded. Gateway will be used."
-				[System.Boolean]$UseLogAnalyticsGateway = $true
-			}
-			else {
-				Write-Log -Message "Log Analytics Gateway connection test failed. Gateway will not be used."
-				[System.Boolean]$UseLogAnalyticsGateway = $false
-			}
-		}
-
-		### Check for an existing installation
+		### Check for an existing installation of the MMA using the product code
+		Write-Log -Message "START: Microsoft Monitoring Agent installation check."
 		Write-Log -Message "Checking for an existing installation of the Microsoft Monitoring Agent"
-		if (Get-InstalledApplication -ProductCode '{88EE688B-31C6-4B90-90DF-FBB345223F94}' -ErrorAction SilentlyContinue) {
+		if (Get-InstalledApplication -ProductCode $MMAProductCode -ErrorAction SilentlyContinue) {
 			Write-Log -Message "Microsoft Monitoring Agent is already installed."
 			[System.Boolean]$MMAInstalled = $true
 		}
@@ -215,9 +186,56 @@ Try {
 			Write-Log -Message "Microsoft Monitoring Agent is not installed."
 			[System.Boolean]$MMAInstalled = $false
 		}
+		Write-Log -Message "END: Microsoft Monitoring Agent installation check."
+		###
 
-		### Check for the presence of the MMA service.
+		### Check resolution of the Gateway
+		Write-Log -Message "START: Log Analytics Gateway connectivity test."
+		Write-Log -Message "Attempting to resolve the Fully Qualified Domain Name of the Log Analytics Gateway, which is: '$LogAnalyticsGatewayFQDN'."
+		if (Resolve-DnsName -Name $LogAnalyticsGatewayFQDN -Type A -ErrorAction SilentlyContinue) {
+
+			### If the FQDN resolved, now try a connection to the it.
+			Write-Log -Message "The Gateway FQDN was resolved. Attempting a TCP Connection."
+			$TestLAGatewayConnection = Test-NetConnection -ComputerName $LogAnalyticsGatewayFQDN -Port $LogAnalyticsGatewayPortNumber -ErrorAction SilentlyContinue
+
+			if ($TestLAGatewayConnection.TcpTestSucceeded) {
+				### If the connection succeeded, indicate we'll use it to connect the MMA to the workspace and use the FQDN of the Gateway
+				Write-Log -Message "Log Analytics Gateway connection test succeeded. Gateway FQDN will be used."
+				[System.Boolean]$UseLogAnalyticsGateway = $true
+				[System.Boolean]$UseLogAnalyticsGatewayFQDN = $true
+			}
+			else {
+				### If the connection test did not succeed, set the MMA agent to go direct
+				Write-Log -Message "Log Analytics Gateway connection test failed. Gateway will not be used."
+				[System.Boolean]$UseLogAnalyticsGateway = $false
+				[System.Boolean]$UseLogAnalyticsGatewayFQDN = $false
+			}
+		}
+		else {
+			### Since the FQDN could not be resolved, try the specified IP address
+			Write-Log -Message "The FQDN could not be resolved. Trying a TCP connection test its specified IP Address: '$LogAnalyticsGatewayIPAddress'."
+			$TestLAGatewayConnection = Test-NetConnection -ComputerName $LogAnalyticsGatewayIPAddress -Port $LogAnalyticsGatewayPortNumber -ErrorAction SilentlyContinue
+
+			if ($TestLAGatewayConnection.TcpTestSucceeded) {
+				### If the connection succeeded, indicate we'll use it to connect the MMA to the workspace and use the IP Address of the Gateway
+				Write-Log -Message "Log Analytics Gateway connection test succeeded. Gateway IP Address will be used."
+				[System.Boolean]$UseLogAnalyticsGateway = $true
+				[System.Boolean]$UseLogAnalyticsGatewayFQDN = $false
+			}
+			else {
+				### If the connection test did not succeed, set the MMA agent to go direct
+				Write-Log -Message "Log Analytics Gateway connection test failed. Gateway will not be used."
+				[System.Boolean]$UseLogAnalyticsGateway = $false
+				[System.Boolean]$UseLogAnalyticsGatewayFQDN = $false
+			}
+		}
+		Write-Log -Message "END: Log Analytics Gateway connectivity test."
+		###
+
+		### Check for the presence of the MMA service based on whether or not the MMA is installed.
+		Write-Log -Message "START: Microsoft Monitoring Agent service and configuration check."
 		if ($true -eq $MMAInstalled) {
+			### Since the MMA is installed, check the health and check the added Log Analytics workspaces.
 			Write-Log -Message "Checking the MMA service."
 			[System.ServiceProcess.ServiceController]$GetMMAService = Get-Service -Name "HealthService" -ErrorAction SilentlyContinue
 
@@ -233,14 +251,21 @@ Try {
 					Write-Log -Message "Creating MMA COM Object."
 					[System.__ComObject]$NewMMACOMObject = New-Object -ComObject "AgentConfigManager.MgmtSvcCfg"
 
-					### Get workspaces
+					<#
+						Get workspaces and add them to a new array list (even if there's only 1)
+						An Array List is used here to keep results consistant; if there's only 1 workspace returned and no array list is used,
+						then the object returned isn't an array object, which results in code below having to account for that.
+					#>
 					Write-Log -Message "Getting workspaces."
 					[System.Collections.ArrayList]$CloudWorkspaces = @()
 					$NewMMACOMObject.GetCloudWorkspaces() | ForEach-Object -Process {
 						$CloudWorkspaces.Add($_) | Out-Null
 					}
 
-
+					<#
+						Using the array of workspaces returned from the above code, check if the workspace ID defined up top in the variables
+						is already present.
+					#>
 					if ($CloudWorkspaces | Where-Object -FilterScript { $_.workspaceId -eq $LogAnalyticsWorkspaceID }) {
 						### If the workspace is found, check its connectivity.
 						Write-Log -Message "Log Analytics Workspace ID: '$LogAnalyticsWorkspaceID' is already present."
@@ -249,24 +274,71 @@ Try {
 
 						### Check if the workspace is connected
 						if ($CloudWorkspace.ConnectionStatus -eq 0) {
+							### If the workspace is connected, there's no need to connect or disconnect
 							Write-Log -Message "Log Analytics Workspace ID: '$LogAnalyticsWorkspaceID' is already connected."
 							[System.Boolean]$AddLogAnalyticsWorkspace = $false
 							[System.Boolean]$RemoveLogAnalyticsWorkspace = $false
 						}
 						else {
+							### If the workspace is not connected, then set the workspace to be removed and added back in an attempt to get it healthy
 							Write-Log -Message "Log Analytics Workspace ID: '$LogAnalyticsWorkspaceID' is not connected. Will remove and re-add."
 							[System.Boolean]$AddLogAnalyticsWorkspace = $true
 							[System.Boolean]$RemoveLogAnalyticsWorkspace = $true
 						}
 					}
 					else {
-						### If the workspace is not found, set it to be added
+						### If the workspace is not found at all, set it to be added
 						Write-Log -Message "Log Analytics Workspace ID: '$LogAnalyticsWorkspaceID' not present."
 						[System.Boolean]$AddLogAnalyticsWorkspace = $true
 						[System.Boolean]$RemoveLogAnalyticsWorkspace = $false
 					}
+
+					<#
+						Since the MMA is installed and the service is running and using the gateway check from above,
+						create the Gateway URL and then see if the gateway has already been added to the MMA service config
+					#>
+					if ($true -eq $UseLogAnalyticsGateway) {
+						### Since the Gateway is supposed to be used, determine if the FQDN or the IP Address is supposed to be used
+						if ($true -eq $UseLogAnalyticsGatewayFQDN) {
+							### If the FQDN is supposed to be used, create the URL for the gateway using it
+							Write-Log -Message "Creating the Log Analytics Gateway URL String using the FQDN of the Gateway."
+							[System.String]$LogAnalyticsGatewayURL = [System.String]::Concat("https://", $LogAnalyticsGatewayFQDN, ":", $LogAnalyticsGatewayPortNumber)
+						}
+						else {
+							### If the FQDN cannot be used, create the URL for the gateway using its (manuall-supplied) IP Address instead
+							Write-Log -Message "Creating the Log Analytics Gateway URL String using the IP Address of the Gateway."
+							[System.String]$LogAnalyticsGatewayURL = [System.String]::Concat("https://", $LogAnalyticsGatewayIPAddress, ":", $LogAnalyticsGatewayPortNumber)
+						}
+
+						### Log the value of the URL.
+						Write-Log -Message "The URL of the Log Analytics Gateway is now: '$LogAnalyticsGatewayURL'."
+
+						### With the URL of the gateway created, now check for its presence in the existing MMA settings.
+
+						if (!($NewMMACOMObject | Get-Member -Name "SetProxyInfo" -ErrorAction SilentlyContinue)) {
+							### If the SetProxyInfo method doesn't exist on the object, then the version of the MMA is too old to work with a Gateway
+							Write-Log -Message """SetProxyInfo"" property doesn't exist on object, so not taking any proxy/gateway-related actions."
+						}
+						else {
+							### Check the value of the proxy and if it doesn't match what's expected, then set a new one.
+							[System.String]$CurrentProxyURL = $NewMMACOMObject.proxyUrl
+							if ($CurrentProxyURL -eq $LogAnalyticsGatewayURL) {
+								### The current value matches the desired value, don't do anything
+								Write-Log -Message "The current proxy value of: '$CurrentProxyURL' matches the desired value of: '$LogAnalyticsGatewayURL'. Not setting a proxy."
+							}
+							else {
+								### The current value does not match the desired value, set the proxy. The configuration doesn't have to be reloaded for the changes to take effect
+								Write-Log -Message "The current proxy value of: '$CurrentProxyURL' does not match the desired value of: '$LogAnalyticsGatewayURL'. Setting a proxy."
+								$NewMMACOMObject.SetProxyInfo($LogAnalyticsGatewayURL, "", "")
+							}
+						}
+					}
+					else {
+						Write-Log -Message "Installation is set to go direct, so not checking the gateay configuration."
+					}
 				}
 				else {
+					### Otherwise, the MMA is installed but the service isn't running, so set the MMA to be installed.
 					Write-Log -Message "MMA service is not running. Setting MMA to be installed."
 					[System.Boolean]$AddLogAnalyticsWorkspace = $false
 					[System.Boolean]$RemoveLogAnalyticsWorkspace = $false
@@ -274,29 +346,40 @@ Try {
 				}
 			}
 			else {
+				### Otherwise, the MMA is installed, but the service wasn't even found, so set the MMA to be installed.
 				Write-Log -Message "MMA service not found. Setting MMA to be installed."
 				[System.Boolean]$InstallMMA = $true
 			}
 		}
 		else {
+			### Otherwise the MMA isn't installed, so it should be.
 			Write-Log -Message "The Microsoft Monitoring Agent is not installed. Setting it to be installed."
 			[System.Boolean]$InstallMMA = $true
 		}
+		Write-Log -Message "END: Microsoft Monitoring Agent service and configuration check."
+		###
 
-		### Now create the string for arguments for setup.exe for the MMA based on the connection tests.
+		### Now create the string for arguments for setup.exe for the MMA based on connection tests and installation checks.
+		Write-Log -Message "START: Microsoft Monitoring Agent installation string creation."
 		if ($UseLogAnalyticsGateway -and ($true -eq $InstallMMA)) {
+			### If the MMA needs to be installed and the gateway can be used, create an installation string which reflects that
 			Write-Log -Message "Creating parameter string for setup.exe specifying Log Analytics Gateway."
-			[System.String]$LogAnalyticsGatewayParameters = "/qn NOAPM=1 ADD_OPINSIGHTS_WORKSPACE=1 OPINSIGHTS_WORKSPACE_AZURE_CLOUD_TYPE=$AzureCloudType OPINSIGHTS_WORKSPACE_ID=""$LogAnalyticsWorkspaceID"" OPINSIGHTS_WORKSPACE_KEY=""$LogAnalyticsWorkspaceKey"" OPINSIGHTS_PROXY_URL=""$LogAnalyticsGatewayURI"" AcceptEndUserLicenseAgreement=1"
+			[System.String]$LogAnalyticsGatewayParameters = "/qn NOAPM=1 ADD_OPINSIGHTS_WORKSPACE=1 OPINSIGHTS_WORKSPACE_AZURE_CLOUD_TYPE=$AzureCloudType OPINSIGHTS_WORKSPACE_ID=""$LogAnalyticsWorkspaceID"" OPINSIGHTS_WORKSPACE_KEY=""$LogAnalyticsWorkspaceKey"" OPINSIGHTS_PROXY_URL=""$LogAnalyticsGatewayURL"" AcceptEndUserLicenseAgreement=1"
 		}
 		elseif ($true -eq $InstallMMA) {
+			### If the MMA needs to be installed and the gateway can't be used, create an installation string which reflects that
 			Write-Log -Message "Creating parameter string for setup.exe not specifying Log Analytics Gateway."
 			[System.String]$LogAnalyticsGatewayParameters = "/qn NOAPM=1 ADD_OPINSIGHTS_WORKSPACE=1 OPINSIGHTS_WORKSPACE_AZURE_CLOUD_TYPE=$AzureCloudType OPINSIGHTS_WORKSPACE_ID=""$LogAnalyticsWorkspaceID"" OPINSIGHTS_WORKSPACE_KEY=""$LogAnalyticsWorkspaceKey"" AcceptEndUserLicenseAgreement=1"
 		}
 		else {
+			### Otherwise, the MMA doesn't need to be installed, so don't create an installation string.
 			Write-Log -Message "'InstallMMA' is set to: '$InstallMMA' so not creating parameter string."
 		}
+		Write-Log -Message "END: Microsoft Monitoring Agent installation string creation."
+		###
 
-		### If the Log Analytics workspace needs to be removed, remove it.
+		### Log Analytics workspace needs to be removed, remove it. This only occurs if the MMA is already installed.
+		Write-Log -Message "START: Microsoft Monitoring Agent Log Analytics Workspace removal."
 		if ($true -eq $RemoveLogAnalyticsWorkspace) {
 			Write-Log -Message "Removing Log Analytics Workspace from Microsoft Monitoring Agent already present."
 			$NewMMACOMObject.RemoveCloudWorkspace($LogAnalyticsWorkspaceID)
@@ -304,8 +387,14 @@ Try {
 			Write-Log -Message "Reloading MMA configuration."
 			$NewMMACOMObject.ReloadConfiguration()
 		}
+		else {
+			Write-Log -Message "Not removing a Log Analytics Workspace from the Microsoft Monitoring Agent."
+		}
+		Write-Log -Message "END: Microsoft Monitoring Agent Log Analytics Workspace removal."
+		###
 
-		### If the Log Analytics workspace needs to be added, add it.
+		### If the Log Analytics workspace needs to be added, add it. This only occurs if the MMA is already installed.
+		Write-Log -Message "START: Microsoft Monitoring Agent Log Analytics Workspace addition."
 		if ($true -eq $AddLogAnalyticsWorkspace) {
 			Write-Log -Message "Adding Log Analytics Workspace to Microsoft Monitoring Agent already present."
 			$NewMMACOMObject.AddCloudWorkspace($LogAnalyticsWorkspaceID, $LogAnalyticsWorkspaceKey, $AzureCloudType)
@@ -313,6 +402,11 @@ Try {
 			Write-Log -Message "Reloading MMA configuration."
 			$NewMMACOMObject.ReloadConfiguration()
 		}
+		else {
+			Write-Log -Message "Not adding a Log Analytics Workspace from the Microsoft Monitoring Agent."
+		}
+		Write-Log -Message "END: Microsoft Monitoring Agent Log Analytics Workspace additionl."
+		###
 
 		##*===============================================
 		##* INSTALLATION
@@ -324,16 +418,16 @@ Try {
 		If ($useDefaultMsi) {
 			[hashtable]$ExecuteDefaultMSISplat = @{ Action = 'Install'; Path = $defaultMsiFile }; If ($defaultMstFile) {
 				$ExecuteDefaultMSISplat.Add('Transform', $defaultMstFile)
-   }
+			}
 			Execute-MSI @ExecuteDefaultMSISplat; If ($defaultMspFiles) {
 				$defaultMspFiles | ForEach-Object { Execute-MSI -Action 'Patch' -Path $_ }
-   }
+   			}
 		}
 		#>
+
 		## <Perform Installation tasks here>
-
-		## Install Microsoft Monitoring Agent by calling setup.exe
-
+		### Install Microsoft Monitoring Agent by calling setup.exe
+		Write-Log -Message "START: Microsoft Monitoring Agent installation."
 		if ($true -eq $InstallMMA) {
 			Show-InstallationProgress -StatusMessage "Installing the Microsoft Monitoring Agent. Please wait..."
 			Execute-Process -Path $SetupPath -Parameters $LogAnalyticsGatewayParameters -WindowStyle Hidden -IgnoreExitCodes "3010"
@@ -341,6 +435,8 @@ Try {
 		else {
 			Show-InstallationProgress -StatusMessage "Not installing the Microsoft Monitoring Agent."
 		}
+		Write-Log -Message "END: Microsoft Monitoring Agent installation."
+		###
 
 		##*===============================================
 		##* POST-INSTALLATION
